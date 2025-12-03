@@ -26,6 +26,11 @@ wheels/
 venv/
 ENV/
 env/
+.pyenv/
+pyenv/
+**/.pyenv/
+*%USERPROFILE%*
+%USERPROFILE%.pyenv/
 
 # IDE
 .vscode/

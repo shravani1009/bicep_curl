@@ -47,6 +47,10 @@ class BaseExercise(ABC):
         
         # Colors from config
         self.colors = COLORS
+
+        # Preferred frame size
+        self.frame_width = CAMERA_CONFIG.get('width', 1280)
+        self.frame_height = CAMERA_CONFIG.get('height', 720)
         
     @abstractmethod
     def get_exercise_name(self):
@@ -216,16 +220,13 @@ class BaseExercise(ABC):
         # Select difficulty level
         self.select_difficulty_level()
         
-        # Initialize camera
-        cap = cv2.VideoCapture(0)
+        # Initialize camera (supports DroidCam and regular webcams)
+        cap = self.initialize_camera()
         
         # Check if camera opened successfully
-        if not cap.isOpened():
+        if cap is None or not cap.isOpened():
             print("ERROR: Cannot open camera")
             return
-        
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, CAMERA_CONFIG['width'])
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, CAMERA_CONFIG['height'])
         
         # Print instructions
         self.print_instructions()
@@ -259,6 +260,40 @@ class BaseExercise(ABC):
         if self.session_data['total_reps'] > 0:
             summary = self.get_session_summary()
             self.print_session_summary(summary)
+    
+    def initialize_camera(self):
+        """
+        Initialize camera with support for DroidCam and regular webcams.
+        Returns:
+            cv2.VideoCapture or None
+        """
+        def _prepare(cap):
+            if not cap or not cap.isOpened():
+                return None
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.frame_width)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.frame_height)
+            return cap
+
+        camera_source = CAMERA_CONFIG.get('source')
+
+        if camera_source is not None:
+            print(f"Using camera source: {camera_source}")
+            cap = cv2.VideoCapture(camera_source) if isinstance(camera_source, str) else cv2.VideoCapture(int(camera_source))
+            prepared = _prepare(cap)
+            if prepared:
+                return prepared
+            print("Unable to open specified camera source.")
+
+        for idx in [1, 2, 3, 0]:
+            cap = cv2.VideoCapture(idx)
+            prepared = _prepare(cap)
+            if prepared:
+                print(f"Auto-selected camera index {idx}")
+                return prepared
+
+        print("No camera available. Update CAMERA_CONFIG['source'] with a valid index or DroidCam URL.")
+        return None
     
     def print_instructions(self):
         """Print exercise instructions (can be overridden)."""
