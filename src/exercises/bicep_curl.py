@@ -235,7 +235,7 @@ class BicepCurlChecker(BaseExercise):
                     data['rep_count'] += 1
                     data['rep_state'] = 'WAITING'
                     data['feedback'] = [f"✓ {arm} REP {data['rep_count']}!"]
-                    self.session_data['total_reps'] += 1
+                    self.session_tracker.add_rep()
                     print(f"🎉 {arm} ARM: REP {data['rep_count']} COMPLETE - Perfect form!")
                 else:
                     data['rep_state'] = 'WAITING'
