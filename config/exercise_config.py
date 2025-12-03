@@ -5,13 +5,7 @@ Modify these values to adjust difficulty levels and form requirements.
 
 # Camera and Detection Settings
 CAMERA_CONFIG = {
-    # Camera source: 
-    #   - Integer (0, 1, 2, etc.) for USB/webcam device index
-    #     * 0 = laptop/webcam
-    #     * 1, 2, 3 = USB DroidCam (usually 1 or 2)
-    #   - String URL for DroidCam WiFi (e.g., 'http://192.168.1.100:4747/video')
-    #   - Leave as None to auto-detect (will try 0, 1, 2, then prompt)
-    'source': 'http://192.168.1.58:4747/video',  # Try 1 for USB DroidCam, or use WiFi URL like 'http://192.168.1.100:4747/video'
+    'source': 0,  # 0 = laptop webcam
     'width': 1280,
     'height': 720,
     'min_detection_confidence': 0.5,

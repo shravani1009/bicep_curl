@@ -5,6 +5,7 @@ Monitors proper bicep curl form with essential checks only.
 
 import cv2
 import numpy as np
+import time
 from src.exercises.base_exercise import BaseExercise
 from src.utils.angle_calculator import AngleCalculator
 from config.exercise_config import BICEP_CURL_CONFIG, COLORS
@@ -257,40 +258,59 @@ class BicepCurlChecker(BaseExercise):
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, self.colors['text'], 2)
         y_offset += 40
         
-        for arm in self.active_arms:
+        # Always show both arms (LEFT and RIGHT)
+        for arm in ['LEFT', 'RIGHT']:
             data = self.arm_data[arm]
+            
+            # Check if arm is currently visible
+            is_visible = arm in self.active_arms
             
             cv2.putText(image, f"=== {arm} ARM ===", (w - panel_width + 20, y_offset),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, self.colors['warning'], 2)
             y_offset += 30
             
-            cv2.putText(image, f"REPS: {data['rep_count']}", (w - panel_width + 30, y_offset),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, self.colors['good'], 2)
-            y_offset += 35
-            
-            state_text = data['rep_state'].replace('_', ' ')
-            state_color = self.colors['warning'] if data['rep_state'] != 'WAITING' else self.colors['text']
-            cv2.putText(image, state_text, (w - panel_width + 30, y_offset),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, state_color, 1)
-            y_offset += 25
-            
-            cv2.putText(image, f"Angle: {int(data['elbow_angle'])}°", 
-                       (w - panel_width + 30, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.colors['text'], 1)
-            y_offset += 25
-            
-            form_text = "✓ Good Form" if data['form_valid'] else "✗ Check Form"
-            form_color = self.colors['good'] if data['form_valid'] else self.colors['bad']
-            cv2.putText(image, form_text, (w - panel_width + 30, y_offset),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, form_color, 1)
-            y_offset += 25
-            
-            for msg in data['feedback'][:2]:
-                msg_color = self.colors['bad'] if "NOT" in msg or "aborted" in msg.lower() else self.colors['good']
-                if len(msg) > 35:
-                    msg = msg[:32] + "..."
-                cv2.putText(image, msg, (w - panel_width + 35, y_offset),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.4, msg_color, 1)
-                y_offset += 18
+            if is_visible:
+                # Show normal stats when visible
+                cv2.putText(image, f"REPS: {data['rep_count']}", (w - panel_width + 30, y_offset),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, self.colors['good'], 2)
+                y_offset += 35
+                
+                state_text = data['rep_state'].replace('_', ' ')
+                state_color = self.colors['warning'] if data['rep_state'] != 'WAITING' else self.colors['text']
+                cv2.putText(image, state_text, (w - panel_width + 30, y_offset),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, state_color, 1)
+                y_offset += 25
+                
+                cv2.putText(image, f"Angle: {int(data['elbow_angle'])}°", 
+                           (w - panel_width + 30, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.colors['text'], 1)
+                y_offset += 25
+                
+                form_text = "✓ Good Form" if data['form_valid'] else "✗ Check Form"
+                form_color = self.colors['good'] if data['form_valid'] else self.colors['bad']
+                cv2.putText(image, form_text, (w - panel_width + 30, y_offset),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, form_color, 1)
+                y_offset += 25
+                
+                for msg in data['feedback'][:2]:
+                    msg_color = self.colors['bad'] if "NOT" in msg or "aborted" in msg.lower() else self.colors['good']
+                    if len(msg) > 35:
+                        msg = msg[:32] + "..."
+                    cv2.putText(image, msg, (w - panel_width + 35, y_offset),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.4, msg_color, 1)
+                    y_offset += 18
+            else:
+                # Show "NOT VISIBLE" when arm is not detected
+                cv2.putText(image, f"REPS: {data['rep_count']}", (w - panel_width + 30, y_offset),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, self.colors['text'], 2)
+                y_offset += 35
+                
+                cv2.putText(image, "NOT VISIBLE", (w - panel_width + 30, y_offset),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.7, self.colors['bad'], 2)
+                y_offset += 30
+                
+                cv2.putText(image, "Position arm in frame", (w - panel_width + 30, y_offset),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.4, self.colors['text'], 1)
+                y_offset += 45
             
             y_offset += 20
     
@@ -396,7 +416,7 @@ class BicepCurlChecker(BaseExercise):
         self.active_arms = []
         for arm in ['LEFT', 'RIGHT']:
             self.arm_data[arm] = self._create_arm_state()
-        print("\n✓ Session reset - Baselines will be recalibrated")
+        print("✓ Bicep curl session reset - Baselines will be recalibrated")
     
     def get_session_specific_data(self):
         """Return arm-specific rep counts."""
@@ -404,3 +424,105 @@ class BicepCurlChecker(BaseExercise):
             'left_arm_reps': self.arm_data['LEFT']['rep_count'],
             'right_arm_reps': self.arm_data['RIGHT']['rep_count']
         }
+    
+    def show_countdown_with_preview(self, cap):
+        """
+        Show camera preview with bicep curl-specific positioning instructions and countdown.
+        
+        Args:
+            cap: OpenCV VideoCapture object
+        """
+        print("\n" + "=" * 60)
+        print("GET READY - BICEP CURL POSITIONING INSTRUCTIONS")
+        print("=" * 60)
+        print("1. Stand 3-4 feet away from the camera")
+        print("2. Ensure your full body is visible in the frame")
+        print("3. Look straight ahead")
+        print("4. Position yourself in good lighting")
+        print("5. Keep elbows fixed and close to body - DO NOT swing!")
+        print("\nCountdown starting in camera preview...")
+        print("=" * 60)
+        
+        window_name = f"AI {self.get_exercise_name()} Trainer - Get Ready"
+        countdown_duration = 5  # 5 seconds
+        start_time = time.time()
+        
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                print("Failed to grab frame during countdown")
+                break
+            
+            # Calculate remaining time
+            elapsed = time.time() - start_time
+            remaining = countdown_duration - int(elapsed)
+            
+            if remaining < 0:
+                break
+            
+            # Create overlay for instructions
+            h, w = frame.shape[:2]
+            overlay = frame.copy()
+            
+            # Dark background for text (larger area for more instructions)
+            cv2.rectangle(overlay, (0, 0), (w, 300), (0, 0, 0), -1)
+            cv2.addWeighted(overlay, 0.6, frame, 0.4, 0, frame)
+            
+            # Title
+            cv2.putText(frame, "GET READY - BICEP CURLS!", (w//2 - 250, 40),
+                       cv2.FONT_HERSHEY_DUPLEX, 1.2, (0, 255, 255), 3)
+            
+            # Instructions
+            instructions = [
+                "1. Stand 3-4 feet from camera",
+                "2. Full body visible",
+                "3. Look straight ahead",
+                "4. Good lighting",
+                "5. Keep elbows FIXED & close to body",
+                "6. Show PALM to reset (hold 0.5s)"
+            ]
+            y_pos = 85
+            for instruction in instructions:
+                # Highlight elbow instruction
+                color = (0, 255, 0) if "elbows" in instruction.lower() else (255, 255, 255)
+                thickness = 2 if "elbows" in instruction.lower() else 1
+                cv2.putText(frame, instruction, (40, y_pos),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, thickness)
+                y_pos += 35
+            
+            # Countdown number (large and centered)
+            if remaining > 0:
+                countdown_text = str(remaining)
+                text_size = cv2.getTextSize(countdown_text, cv2.FONT_HERSHEY_DUPLEX, 5, 10)[0]
+                text_x = (w - text_size[0]) // 2
+                text_y = h - 100
+                
+                # Countdown with color change
+                color = (0, 255, 0) if remaining > 2 else (0, 165, 255)
+                cv2.putText(frame, countdown_text, (text_x, text_y),
+                           cv2.FONT_HERSHEY_DUPLEX, 5, color, 10)
+                cv2.putText(frame, "Starting in...", (w//2 - 120, text_y - 80),
+                           cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+            
+            # Show frame
+            cv2.imshow(window_name, frame)
+            
+            # Wait for small delay for smooth video
+            key = cv2.waitKey(30) & 0xFF
+            if key == ord('q'):
+                cap.release()
+                cv2.destroyAllWindows()
+                return
+        
+        # Show "GO!" message
+        for _ in range(2):  # Show for ~2 frames
+            ret, frame = cap.read()
+            if ret:
+                h, w = frame.shape[:2]
+                cv2.putText(frame, "GO!", (w//2 - 80, h//2),
+                           cv2.FONT_HERSHEY_DUPLEX, 4, (0, 255, 0), 10)
+                cv2.imshow(window_name, frame)
+                cv2.waitKey(500)
+        
+        cv2.destroyWindow(window_name)
+        print("\n✓ Starting bicep curl tracking now!\n")
