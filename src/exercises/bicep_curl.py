@@ -32,21 +32,51 @@ class BicepCurlChecker(BaseExercise):
         self.thresholds = None
     
     def _create_arm_state(self):
-        """Create state tracking for each arm."""
         return {
-            'rep_state': 'WAITING',
-            'rep_count': 0,
-            'elbow_angle': 180,
-            'elbow_shoulder_distance': 0,
-            'elbow_shoulder_baseline': None,
-            'shoulder_y_baseline': None,
-            'baseline_elbow_pos': None,
-            'baseline_shoulder_pos': None,
-            'form_valid': True,
-            'feedback': [],
-            'last_console_feedback': None
-        }
+        'rep_state': 'WAITING',
+        'rep_count': 0,
+        'elbow_angle': 180,
+        'elbow_shoulder_distance': 0,
+        'elbow_shoulder_baseline': None,
+        'shoulder_y_baseline': None,
+        'baseline_elbow_pos': None,
+        'baseline_shoulder_pos': None,
+        'form_valid': True,
+        'feedback': [],
+        'last_console_feedback': None,
+        
+        # NEW: Smoothing
+        'angle_history': [],
+        'angle_window_size': 5,
+        'distance_history': [],
+        'distance_window_size': 5,
+        
+        # NEW: Calibration
+        'calibration_samples': [],
+        'is_calibrated': False,
+        'calibration_required_samples': 30,  # 1 second at 30fps
+    }
     
+    def _smooth_angle(self, arm, new_angle):
+        """Apply moving average to reduce angle jitter."""
+        data = self.arm_data[arm]
+        data['angle_history'].append(new_angle)
+        
+        if len(data['angle_history']) > data['angle_window_size']:
+            data['angle_history'].pop(0)
+        
+        return sum(data['angle_history']) / len(data['angle_history'])
+
+    def _smooth_distance(self, arm, new_distance):
+        """Apply moving average to reduce distance jitter."""
+        data = self.arm_data[arm]
+        data['distance_history'].append(new_distance)
+        
+        if len(data['distance_history']) > data['distance_window_size']:
+            data['distance_history'].pop(0)
+        
+        return sum(data['distance_history']) / len(data['distance_history'])
+
     def get_exercise_name(self):
         return "Bicep Curl"
     
