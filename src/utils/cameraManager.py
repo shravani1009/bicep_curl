@@ -3,7 +3,10 @@ Camera Manager - Handles camera initialization and configuration.
 """
 
 import cv2
-from config.exercise_config import CAMERA_CONFIG
+from config.exerciseConfig import CAMERA_CONFIG
+from src.utils.logger import AppLogger
+
+logger = AppLogger.get_logger(__name__)
 
 
 class CameraManager:
@@ -56,22 +59,54 @@ class CameraManager:
         Returns:
             cv2.VideoCapture or None: Configured camera or None if failed
         """
-        if isinstance(source, str):
-            cap = cv2.VideoCapture(source)
-        else:
-            cap = cv2.VideoCapture(int(source))
-        
-        if not cap or not cap.isOpened():
+        cap = None
+        try:
+            if isinstance(source, str):
+                logger.info(f"Attempting to open camera from URL: {source}")
+                cap = cv2.VideoCapture(source)
+            else:
+                logger.info(f"Attempting to open camera at index: {source}")
+                cap = cv2.VideoCapture(int(source))
+            
+            if not cap or not cap.isOpened():
+                logger.warning(f"Camera source {source} failed to open")
+                if cap:
+                    cap.release()
+                return None
+            
+            # Configure camera BEFORE reading to prevent buffer issues
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.frame_width)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.frame_height)
+            
+            # TEST READ to ensure camera actually works
+            ret, test_frame = cap.read()
+            if not ret or test_frame is None:
+                logger.warning(f"Camera source {source} opened but cannot read frames")
+                cap.release()
+                return None
+            
+            logger.info(f"Successfully initialized camera: {source}")
+            return cap
+            
+        except Exception as e:
+            logger.error(f"Error opening camera source {source}: {e}")
             if cap:
                 cap.release()
             return None
+    
+    @staticmethod
+    def clear_buffer(cap, frames=5):
+        """
+        Clear camera buffer by reading and discarding frames.
         
-        # Configure camera
-        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.frame_width)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.frame_height)
-        
-        return cap
+        Args:
+            cap: Camera capture object
+            frames (int): Number of frames to discard
+        """
+        if cap and cap.isOpened():
+            for _ in range(frames):
+                cap.grab()  # Fast read without decoding
     
     @staticmethod
     def release_camera(cap):

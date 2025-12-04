@@ -39,6 +39,10 @@ pyenv/
 *.swo
 *~
 
+# Logs
+logs/
+*.log
+
 # Session Data (optional - keep local sessions private)
 data/sessions/*.json
 
@@ -50,6 +54,3 @@ Thumbs.db
 trial.py
 best.py
 bicep_curl_session_*.json
-
-# Logs
-*.log

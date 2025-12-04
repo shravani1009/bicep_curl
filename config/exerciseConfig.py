@@ -76,3 +76,20 @@ COLORS = {
     'warning': (0, 255, 255),
     'text': (255, 255, 255)
 }
+
+
+# Validate configuration on import
+def _validate_config():
+    """Validate configuration values."""
+    try:
+        from src.utils.validators import ConfigValidator
+        ConfigValidator.validate_camera_config(CAMERA_CONFIG)
+        ConfigValidator.validate_bicep_curl_config(BICEP_CURL_CONFIG)
+    except ImportError:
+        # Validators not yet imported, skip validation
+        pass
+    except Exception as e:
+        raise ValueError(f"Invalid configuration: {e}")
+
+
+_validate_config()

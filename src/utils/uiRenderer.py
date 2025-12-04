@@ -4,7 +4,7 @@ UI Renderer - Handles countdown, instructions, and UI rendering utilities.
 
 import cv2
 import time
-from config.exercise_config import COLORS
+from config.exerciseConfig import COLORS
 
 
 class UIRenderer:

@@ -6,9 +6,13 @@ Monitors proper bicep curl form with essential checks only.
 import cv2
 import numpy as np
 import time
-from src.exercises.base_exercise import BaseExercise
-from src.utils.angle_calculator import AngleCalculator
-from config.exercise_config import BICEP_CURL_CONFIG, COLORS
+from src.exercises.baseExercise import BaseExercise
+from src.utils.angleCalculator import AngleCalculator
+from config.exerciseConfig import BICEP_CURL_CONFIG, COLORS
+from src.utils.validators import InputValidator
+from src.utils.logger import AppLogger
+
+logger = AppLogger.get_logger(__name__)
 
 
 class BicepCurlChecker(BaseExercise):
@@ -87,19 +91,18 @@ class BicepCurlChecker(BaseExercise):
             print(f"{i}. {level}")
             print(f"   {profile['description']}")
         
-        while True:
-            try:
-                choice = input("\nSelect difficulty (1-3): ").strip()
-                if choice in ['1', '2', '3']:
-                    levels = {'1': 'BEGINNER', '2': 'INTERMEDIATE', '3': 'ADVANCED'}
-                    self.difficulty_level = levels[choice]
-                    self.thresholds = BICEP_CURL_CONFIG['difficulty_levels'][self.difficulty_level]
-                    print(f"\n✓ Selected: {self.difficulty_level} level")
-                    return
-                else:
-                    print("Invalid choice.")
-            except Exception as e:
-                print(f"Error: {e}")
+        level_name = InputValidator.get_difficulty_choice(
+            BICEP_CURL_CONFIG['difficulty_levels']
+        )
+        
+        if level_name is None:
+            logger.info("Difficulty selection cancelled, using BEGINNER")
+            level_name = 'BEGINNER'
+        
+        self.difficulty_level = level_name
+        self.thresholds = BICEP_CURL_CONFIG['difficulty_levels'][self.difficulty_level]
+        logger.info(f"Selected difficulty: {self.difficulty_level}")
+        print(f"\n✓ Selected: {self.difficulty_level} level")
     
     def _detect_active_arms(self, landmarks):
         """Detect which arms are visible."""
@@ -473,13 +476,17 @@ class BicepCurlChecker(BaseExercise):
         print("\nCountdown starting in camera preview...")
         print("=" * 60)
         
+        # Clear buffer to prevent reading stale frames
+        from src.utils.cameraManager import CameraManager
+        CameraManager.clear_buffer(cap)
+        
         window_name = f"AI {self.get_exercise_name()} Trainer - Get Ready"
         countdown_duration = 5  # 5 seconds
         start_time = time.time()
         
         while True:
             ret, frame = cap.read()
-            if not ret:
+            if not ret or frame is None:
                 print("Failed to grab frame during countdown")
                 break
             

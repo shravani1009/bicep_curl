@@ -4,7 +4,7 @@ Palm Detector - Handles palm gesture detection for session reset.
 
 import cv2
 import mediapipe as mp
-from config.exercise_config import COLORS
+from config.exerciseConfig import COLORS
 
 
 class PalmDetector:
