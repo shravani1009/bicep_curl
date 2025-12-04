@@ -12,6 +12,9 @@ from .landmarkExtractor import LandmarkExtractor
 from .feedbackManager import FeedbackManager
 from .logger import AppLogger
 from .validators import InputValidator, ConfigValidator
+from .limbDetector import LimbDetector
+from .repStateMachine import RepStateMachine, RepState
+from .visualAnnotations import VisualAnnotations
 
 __all__ = [
     'ExponentialMovingAverage',
@@ -26,5 +29,9 @@ __all__ = [
     'FeedbackManager',
     'AppLogger',
     'InputValidator',
-    'ConfigValidator'
+    'ConfigValidator',
+    'LimbDetector',
+    'RepStateMachine',
+    'RepState',
+    'VisualAnnotations'
 ]

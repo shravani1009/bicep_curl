@@ -1,13 +1,16 @@
 """
-Bicep Curl Exercise Checker - Simplified Version
-Monitors proper bicep curl form with essential checks only.
+Bicep Curl Exercise Checker - Component-Based Version
+Clean, maintainable code using reusable components.
 """
 
 import cv2
-import numpy as np
 import time
 from src.exercises.baseExercise import BaseExercise
 from src.utils.angleCalculator import AngleCalculator
+from src.utils.limbDetector import LimbDetector
+from src.utils.repStateMachine import RepStateMachine
+from src.utils.visualAnnotations import VisualAnnotations
+from src.utils.smoothing import ExponentialMovingAverage
 from config.exerciseConfig import BICEP_CURL_CONFIG, COLORS
 from src.utils.validators import InputValidator
 from src.utils.logger import AppLogger
@@ -17,146 +20,116 @@ logger = AppLogger.get_logger(__name__)
 
 class BicepCurlChecker(BaseExercise):
     """
-    Simplified bicep curl form checker.
+    Bicep curl form checker using reusable components.
     
     Monitors:
-    1. Elbow angle (shoulder-elbow-wrist) - main rep tracking
-    2. Elbow stability (distance from shoulder) - prevents swinging
-    3. Shoulder shrug check
+    - Elbow angle for rep counting
+    - Elbow stability (prevents swinging)
+    - Shoulder stability (prevents shrugging)
     """
     
     def __init__(self):
         super().__init__()
+        
+        # Exercise state
         self.active_arms = []
-        self.arm_data = {
-            'LEFT': self._create_arm_state(),
-            'RIGHT': self._create_arm_state()
-        }
         self.difficulty_level = None
         self.thresholds = None
+        
+        # Arm tracking
+        self.arm_data = {
+            'LEFT': self._create_arm_state('LEFT ARM'),
+            'RIGHT': self._create_arm_state('RIGHT ARM')
+        }
     
-    def _create_arm_state(self):
+    def _create_arm_state(self, limb_name):
+        """Create state tracking for a single arm."""
         return {
-        'rep_state': 'WAITING',
-        'rep_count': 0,
-        'elbow_angle': 180,
-        'elbow_shoulder_distance': 0,
-        'elbow_shoulder_baseline': None,
-        'shoulder_y_baseline': None,
-        'baseline_elbow_pos': None,
-        'baseline_shoulder_pos': None,
-        'form_valid': True,
-        'feedback': [],
-        'last_console_feedback': None,
-        
-        # NEW: Smoothing
-        'angle_history': [],
-        'angle_window_size': 5,
-        'distance_history': [],
-        'distance_window_size': 5,
-        
-        # NEW: Calibration
-        'calibration_samples': [],
-        'is_calibrated': False,
-        'calibration_required_samples': 30,  # 1 second at 30fps
-    }
+            'state_machine': RepStateMachine(limb_name),
+            'angle_smoother': ExponentialMovingAverage(alpha=0.3),
+            'distance_smoother': ExponentialMovingAverage(alpha=0.3),
+            'current_angle': 180,
+            'current_distance': 0,
+            'baseline_distance': None,
+            'baseline_shoulder_y': None,
+            'baseline_elbow_pos': None,
+            'baseline_shoulder_pos': None,
+            'form_valid': True,
+            'form_issues': []
+        }
     
-    def _smooth_angle(self, arm, new_angle):
-        """Apply moving average to reduce angle jitter."""
-        data = self.arm_data[arm]
-        data['angle_history'].append(new_angle)
-        
-        if len(data['angle_history']) > data['angle_window_size']:
-            data['angle_history'].pop(0)
-        
-        return sum(data['angle_history']) / len(data['angle_history'])
-
-    def _smooth_distance(self, arm, new_distance):
-        """Apply moving average to reduce distance jitter."""
-        data = self.arm_data[arm]
-        data['distance_history'].append(new_distance)
-        
-        if len(data['distance_history']) > data['distance_window_size']:
-            data['distance_history'].pop(0)
-        
-        return sum(data['distance_history']) / len(data['distance_history'])
-
     def get_exercise_name(self):
+        """Return exercise name."""
         return "Bicep Curl"
     
     def select_difficulty_level(self):
-        """Select difficulty level."""
-        print("\n=== BICEP CURL DIFFICULTY LEVELS ===")
-        for i, (level, profile) in enumerate(BICEP_CURL_CONFIG['difficulty_levels'].items(), 1):
-            print(f"{i}. {level}")
-            print(f"   {profile['description']}")
+        """Let user select difficulty level."""
+        print("\n" + "="*50)
+        print("BICEP CURL DIFFICULTY LEVELS")
+        print("="*50)
         
+        for i, (level, config) in enumerate(BICEP_CURL_CONFIG['difficulty_levels'].items(), 1):
+            print(f"\n{i}. {level}")
+            print(f"   {config['description']}")
+        
+        print("\n" + "="*50)
+        
+        # Get validated choice
         level_name = InputValidator.get_difficulty_choice(
             BICEP_CURL_CONFIG['difficulty_levels']
         )
         
         if level_name is None:
-            logger.info("Difficulty selection cancelled, using BEGINNER")
             level_name = 'BEGINNER'
+            print("⚠ Defaulting to BEGINNER level")
         
         self.difficulty_level = level_name
-        self.thresholds = BICEP_CURL_CONFIG['difficulty_levels'][self.difficulty_level]
-        logger.info(f"Selected difficulty: {self.difficulty_level}")
-        print(f"\n✓ Selected: {self.difficulty_level} level")
-    
-    def _detect_active_arms(self, landmarks):
-        """Detect which arms are visible."""
-        try:
-            left_shoulder = self.get_landmark_features(landmarks, 'LEFT_SHOULDER')
-            left_elbow = self.get_landmark_features(landmarks, 'LEFT_ELBOW')
-            left_wrist = self.get_landmark_features(landmarks, 'LEFT_WRIST')
-            
-            right_shoulder = self.get_landmark_features(landmarks, 'RIGHT_SHOULDER')
-            right_elbow = self.get_landmark_features(landmarks, 'RIGHT_ELBOW')
-            right_wrist = self.get_landmark_features(landmarks, 'RIGHT_WRIST')
-            
-            active_arms = []
-            left_visibility = (left_shoulder['visibility'] + left_elbow['visibility'] + left_wrist['visibility']) / 3
-            right_visibility = (right_shoulder['visibility'] + right_elbow['visibility'] + right_wrist['visibility']) / 3
-            
-            if left_visibility > 0.5:
-                active_arms.append('LEFT')
-            if right_visibility > 0.5:
-                active_arms.append('RIGHT')
-            
-            return active_arms
-        except Exception:
-            return []
+        self.thresholds = BICEP_CURL_CONFIG['difficulty_levels'][level_name]
+        
+        logger.info(f"Selected difficulty: {level_name}")
+        print(f"\n✓ Selected: {level_name} level\n")
     
     def analyze_pose(self, landmarks):
-        """Analyze bicep curl form for active arms."""
+        """
+        Analyze bicep curl pose using components.
+        
+        Returns:
+            dict: Analysis results or None
+        """
         if not landmarks:
             return None
         
         try:
-            detected_arms = self._detect_active_arms(landmarks)
-            if not detected_arms:
+            # Detect which arms are visible using LimbDetector
+            self.active_arms = LimbDetector.detect_arms(
+                landmarks,
+                self.pose_processor.landmark_extractor,
+                self.pose_processor.mp_pose,
+                visibility_threshold=0.5
+            )
+            
+            if not self.active_arms:
                 return None
             
-            self.active_arms = detected_arms
+            # Analyze each visible arm
             results = {}
-            
             for arm in self.active_arms:
-                arm_result = self._analyze_single_arm(landmarks, arm)
+                arm_result = self._analyze_arm(landmarks, arm)
                 if arm_result:
                     results[arm] = arm_result
             
             return results if results else None
             
         except Exception as e:
-            print(f"Error in pose analysis: {e}")
+            logger.error(f"Error analyzing pose: {e}")
             return None
     
-    def _analyze_single_arm(self, landmarks, arm):
-        """Analyze a single arm's form."""
+    def _analyze_arm(self, landmarks, arm):
+        """Analyze single arm using components."""
         try:
             data = self.arm_data[arm]
             
+            # Get landmarks
             shoulder = self.get_landmark_features(landmarks, f'{arm}_SHOULDER')
             elbow = self.get_landmark_features(landmarks, f'{arm}_ELBOW')
             wrist = self.get_landmark_features(landmarks, f'{arm}_WRIST')
@@ -164,191 +137,154 @@ class BicepCurlChecker(BaseExercise):
             if not all([shoulder, elbow, wrist]):
                 return None
             
-            if min(shoulder['visibility'], elbow['visibility'], wrist['visibility']) < 0.3:
-                return None
+            # Calculate angle
+            angle = AngleCalculator.calculate_angle(
+                (shoulder['x'], shoulder['y']),
+                (elbow['x'], elbow['y']),
+                (wrist['x'], wrist['y'])
+            )
             
-            shoulder_point = (shoulder['x'], shoulder['y'])
-            elbow_point = (elbow['x'], elbow['y'])
-            wrist_point = (wrist['x'], wrist['y'])
+            # Smooth angle
+            data['current_angle'] = data['angle_smoother'].update(angle)
             
-            elbow_angle = AngleCalculator.calculate_angle(shoulder_point, elbow_point, wrist_point)
-            data['elbow_angle'] = elbow_angle
-            data['elbow_shoulder_distance'] = AngleCalculator.calculate_distance(shoulder_point, elbow_point)
+            # Calculate elbow-shoulder distance
+            distance = AngleCalculator.calculate_distance(
+                (shoulder['x'], shoulder['y']),
+                (elbow['x'], elbow['y'])
+            )
+            data['current_distance'] = data['distance_smoother'].update(distance)
             
-            if data['elbow_shoulder_baseline'] is None and elbow_angle > 160:
-                data['elbow_shoulder_baseline'] = data['elbow_shoulder_distance']
-                data['shoulder_y_baseline'] = shoulder['y']
-                data['baseline_elbow_pos'] = elbow_point
-                data['baseline_shoulder_pos'] = shoulder_point
-                print(f"✓ {arm} arm baseline set - Keep your elbow in the target zone!")
+            # Set baseline when arm is down
+            if data['baseline_distance'] is None and data['current_angle'] > 160:
+                data['baseline_distance'] = data['current_distance']
+                data['baseline_shoulder_y'] = shoulder['y']
+                data['baseline_elbow_pos'] = (elbow['x'], elbow['y'])
+                data['baseline_shoulder_pos'] = (shoulder['x'], shoulder['y'])
+                logger.info(f"{arm} arm baseline set: distance={distance:.3f}, angle={angle:.1f}°")
+                print(f"✓ {arm} arm baseline set - Ready to curl!")
             
-            self._validate_form(arm, shoulder)
-            self._update_rep_count(arm)
+            # Validate form ONLY during movement (not when arm is down)
+            if data['baseline_distance'] is not None and data['current_angle'] < 160:
+                data['form_valid'], data['form_issues'] = self._validate_form(arm, shoulder, elbow)
+            else:
+                # Arm is down, form is automatically valid
+                data['form_valid'] = True
+                data['form_issues'] = []
+            
+            # Update rep state machine
+            state_result = data['state_machine'].update(
+                current_value=data['current_angle'],
+                start_threshold=self.thresholds['elbow_down_min'],
+                peak_threshold=self.thresholds['elbow_up_max'],
+                form_valid=data['form_valid'],
+                tolerance=10
+            )
+            
+            # Track rep completion
+            if state_result['rep_completed']:
+                self.session_tracker.add_rep()
+                logger.info(f"{arm} arm rep completed: {state_result['rep_count']}")
+            
+            # Log feedback
+            if state_result['feedback']:
+                print(f"{arm}: {state_result['feedback']}")
+            
+            # Log form issues
+            if data['form_issues']:
+                print(f"{arm} form issues: {', '.join(data['form_issues'])}")
             
             return {
-                'elbow_angle': data['elbow_angle'],
+                'angle': data['current_angle'],
+                'distance': data['current_distance'],
                 'form_valid': data['form_valid'],
-                'rep_state': data['rep_state'],
-                'rep_count': data['rep_count']
+                'state': state_result['state'],
+                'rep_count': state_result['rep_count'],
+                'feedback': state_result['feedback']
             }
             
         except Exception as e:
-            print(f"Error analyzing {arm} arm: {e}")
+            logger.error(f"Error analyzing {arm} arm: {e}")
             return None
     
-    def _validate_form(self, arm, shoulder):
-        """Validate form - check elbow stability and shoulder shrug."""
+    def _validate_form(self, arm, shoulder, elbow):
+        """
+        Validate bicep curl form using FormChecker.
+        
+        Returns:
+            tuple: (is_valid, list of issues)
+        """
         data = self.arm_data[arm]
-        data['form_valid'] = True
-        data['feedback'] = []
-        console_msg = None
+        issues = []
         
-        if data['elbow_shoulder_baseline'] is None:
-            return
+        # This should only be called when arm is NOT down (handled in _analyze_arm)
+        if data['baseline_distance'] is None:
+            return True, []
         
-        if data['elbow_angle'] < 160:
-            distance_deviation = abs(data['elbow_shoulder_distance'] - data['elbow_shoulder_baseline'])
-            tolerance = self.thresholds.get('elbow_distance_tolerance', 0.15)
-            max_deviation = data['elbow_shoulder_baseline'] * tolerance
-            
-            if distance_deviation > max_deviation:
-                data['form_valid'] = False
-                deviation_pct = int((distance_deviation / data['elbow_shoulder_baseline']) * 100)
-                data['feedback'].append(f"Elbow swinging ({deviation_pct}%)")
-                console_msg = f"⚠️  {arm} ARM: Elbow swinging {deviation_pct}% - Keep elbow fixed!"
+        # Check elbow stability (no swinging forward/back)
+        is_stable, displacement = self.form_checker.check_joint_displacement(
+            current_pos=(elbow['x'], elbow['y'], 0),
+            start_pos=(data['baseline_elbow_pos'][0], data['baseline_elbow_pos'][1], 0),
+            threshold=self.thresholds.get('elbow_distance_tolerance', 0.15),
+            axis='all'
+        )
         
-        if data['shoulder_y_baseline'] is not None:
-            shoulder_lift = data['shoulder_y_baseline'] - shoulder['y']
-            max_lift = self.thresholds.get('shoulder_shrug_threshold', 0.05)
-            
-            if shoulder_lift > max_lift:
-                data['form_valid'] = False
-                data['feedback'].append("Shoulders shrugging")
-                if not console_msg:
-                    console_msg = f"⚠️  {arm} ARM: Shoulders shrugging - Relax shoulders!"
+        if not is_stable:
+            issues.append("Elbow moving")
+            logger.debug(f"{arm} elbow displacement: {displacement:.3f}")
         
-        if console_msg and console_msg != data['last_console_feedback']:
-            print(console_msg)
-            data['last_console_feedback'] = console_msg
-        elif data['form_valid'] and data['last_console_feedback']:
-            data['last_console_feedback'] = None
-    
-    def _update_rep_count(self, arm):
-        """Rep counting state machine."""
-        data = self.arm_data[arm]
-        angle = data['elbow_angle']
-        elbow_down_min = self.thresholds['elbow_down_min']
-        elbow_up_max = self.thresholds['elbow_up_max']
+        # Check shoulder stability (no shrugging)
+        shoulder_lift = data['baseline_shoulder_y'] - shoulder['y']
+        if shoulder_lift > self.thresholds.get('shoulder_shrug_threshold', 0.05):
+            issues.append("Shoulder shrugging")
+            logger.debug(f"{arm} shoulder lift: {shoulder_lift:.3f}")
         
-        if data['rep_state'] == 'WAITING':
-            if angle >= elbow_down_min and data['form_valid']:
-                data['rep_state'] = 'CURLING_UP'
-                data['feedback'] = [f"{arm}: Starting rep"]
-        
-        elif data['rep_state'] == 'CURLING_UP':
-            if angle <= elbow_up_max:
-                if data['form_valid']:
-                    data['rep_state'] = 'AT_TOP'
-                    data['feedback'] = [f"{arm}: Good curl"]
-                    print(f"✓ {arm} ARM: Reached top position - Good form!")
-                else:
-                    data['rep_state'] = 'WAITING'
-                    data['feedback'] = [f"{arm}: Rep aborted"] + data['feedback']
-                    print(f"✗ {arm} ARM: Rep aborted - {'; '.join(data['feedback'][1:])}")
-            elif angle > elbow_down_min + 20:
-                data['rep_state'] = 'WAITING'
-        
-        elif data['rep_state'] == 'AT_TOP':
-            if angle > elbow_up_max + 10:
-                data['rep_state'] = 'LOWERING_DOWN'
-        
-        elif data['rep_state'] == 'LOWERING_DOWN':
-            if angle >= elbow_down_min:
-                if data['form_valid']:
-                    data['rep_count'] += 1
-                    data['rep_state'] = 'WAITING'
-                    data['feedback'] = [f"✓ {arm} REP {data['rep_count']}!"]
-                    self.session_tracker.add_rep()
-                    print(f"🎉 {arm} ARM: REP {data['rep_count']} COMPLETE - Perfect form!")
-                else:
-                    data['rep_state'] = 'WAITING'
-                    data['feedback'] = [f"{arm}: NOT counted"] + data['feedback']
-                    print(f"✗ {arm} ARM: Rep NOT counted - {'; '.join(data['feedback'][1:])}")
-            elif angle < elbow_up_max:
-                data['rep_state'] = 'AT_TOP'
+        is_valid = len(issues) == 0
+        return is_valid, issues
     
     def draw_feedback_panel(self, image):
-        """Draw feedback panel on the image."""
+        """Draw feedback panel using VisualAnnotations."""
         h, w = image.shape[:2]
         panel_width = 400
         
+        # Semi-transparent background
         overlay = image.copy()
         cv2.rectangle(overlay, (w - panel_width, 0), (w, h), (0, 0, 0), -1)
         cv2.addWeighted(overlay, 0.3, image, 0.7, 0, image)
         
-        y_offset = 40
-        cv2.putText(image, "BICEP CURL TRACKER", (w - panel_width + 20, y_offset),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, self.colors['text'], 2)
-        y_offset += 40
+        # Title
+        y = 40
+        cv2.putText(image, "BICEP CURL TRACKER", (w - panel_width + 20, y),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, COLORS['text'], 2)
+        y += 50
         
-        # Always show both arms (LEFT and RIGHT)
+        # Total stats
+        total_reps = sum(self.arm_data[arm]['state_machine'].rep_count 
+                        for arm in ['LEFT', 'RIGHT'])
+        cv2.putText(image, f"TOTAL REPS: {total_reps}", (w - panel_width + 20, y),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, COLORS['warning'], 2)
+        y += 40
+        
+        # Draw each arm panel using VisualAnnotations
         for arm in ['LEFT', 'RIGHT']:
             data = self.arm_data[arm]
-            
-            # Check if arm is currently visible
             is_visible = arm in self.active_arms
             
-            cv2.putText(image, f"=== {arm} ARM ===", (w - panel_width + 20, y_offset),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, self.colors['warning'], 2)
-            y_offset += 30
+            panel_data = {
+                'rep_count': data['state_machine'].rep_count,
+                'state': data['state_machine'].state,
+                'angle': data['current_angle'],
+                'form_valid': data['form_valid'],
+                'feedback': data['form_issues'] + ([data['state_machine'].current_feedback] 
+                           if data['state_machine'].current_feedback else [])
+            }
             
-            if is_visible:
-                # Show normal stats when visible
-                cv2.putText(image, f"REPS: {data['rep_count']}", (w - panel_width + 30, y_offset),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, self.colors['good'], 2)
-                y_offset += 35
-                
-                state_text = data['rep_state'].replace('_', ' ')
-                state_color = self.colors['warning'] if data['rep_state'] != 'WAITING' else self.colors['text']
-                cv2.putText(image, state_text, (w - panel_width + 30, y_offset),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, state_color, 1)
-                y_offset += 25
-                
-                cv2.putText(image, f"Angle: {int(data['elbow_angle'])}°", 
-                           (w - panel_width + 30, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.colors['text'], 1)
-                y_offset += 25
-                
-                form_text = "✓ Good Form" if data['form_valid'] else "✗ Check Form"
-                form_color = self.colors['good'] if data['form_valid'] else self.colors['bad']
-                cv2.putText(image, form_text, (w - panel_width + 30, y_offset),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, form_color, 1)
-                y_offset += 25
-                
-                for msg in data['feedback'][:2]:
-                    msg_color = self.colors['bad'] if "NOT" in msg or "aborted" in msg.lower() else self.colors['good']
-                    if len(msg) > 35:
-                        msg = msg[:32] + "..."
-                    cv2.putText(image, msg, (w - panel_width + 35, y_offset),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.4, msg_color, 1)
-                    y_offset += 18
-            else:
-                # Show "NOT VISIBLE" when arm is not detected
-                cv2.putText(image, f"REPS: {data['rep_count']}", (w - panel_width + 30, y_offset),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, self.colors['text'], 2)
-                y_offset += 35
-                
-                cv2.putText(image, "NOT VISIBLE", (w - panel_width + 30, y_offset),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.7, self.colors['bad'], 2)
-                y_offset += 30
-                
-                cv2.putText(image, "Position arm in frame", (w - panel_width + 30, y_offset),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.4, self.colors['text'], 1)
-                y_offset += 45
-            
-            y_offset += 20
+            y = VisualAnnotations.draw_limb_panel(
+                image, f"{arm} ARM", panel_data,
+                w - panel_width + 20, y, is_visible
+            )
     
     def draw_exercise_annotations(self, image, landmarks):
-        """Draw angle, key points, and visual guide box."""
+        """Draw visual annotations using VisualAnnotations."""
         if not landmarks or not self.active_arms:
             return
         
@@ -358,104 +294,84 @@ class BicepCurlChecker(BaseExercise):
             try:
                 data = self.arm_data[arm]
                 
+                # Get landmarks
                 shoulder = self.get_landmark_features(landmarks, f'{arm}_SHOULDER')
                 elbow = self.get_landmark_features(landmarks, f'{arm}_ELBOW')
                 wrist = self.get_landmark_features(landmarks, f'{arm}_WRIST')
                 
                 if not all([shoulder, elbow, wrist]):
                     continue
-                if min(shoulder['visibility'], elbow['visibility'], wrist['visibility']) < 0.5:
-                    continue
                 
-                sx, sy = int(shoulder['x'] * w), int(shoulder['y'] * h)
-                ex, ey = int(elbow['x'] * w), int(elbow['y'] * h)
-                wx, wy = int(wrist['x'] * w), int(wrist['y'] * h)
+                # Convert to pixel coordinates
+                sp = (int(shoulder['x'] * w), int(shoulder['y'] * h))
+                ep = (int(elbow['x'] * w), int(elbow['y'] * h))
+                wp = (int(wrist['x'] * w), int(wrist['y'] * h))
                 
-                if data['elbow_shoulder_baseline'] is not None and data['baseline_elbow_pos'] is not None:
-                    current_shoulder_norm = (shoulder['x'], shoulder['y'])
-                    baseline_offset_x = data['baseline_elbow_pos'][0] - data['baseline_shoulder_pos'][0]
-                    baseline_offset_y = data['baseline_elbow_pos'][1] - data['baseline_shoulder_pos'][1]
-                    
-                    target_elbow_norm_x = current_shoulder_norm[0] + baseline_offset_x
-                    target_elbow_norm_y = current_shoulder_norm[1] + baseline_offset_y
-                    
-                    target_x = int(target_elbow_norm_x * w)
-                    target_y = int(target_elbow_norm_y * h)
-                    
-                    tolerance = self.thresholds.get('elbow_distance_tolerance', 0.15)
-                    baseline_distance_pixels = np.sqrt((target_x - sx)**2 + (target_y - sy)**2)
-                    box_size = int(baseline_distance_pixels * tolerance * 2)
-                    
-                    current_distance = np.sqrt((ex - target_x)**2 + (ey - target_y)**2)
-                    in_zone = current_distance < box_size / 2
-                    
-                    box_color = self.colors['good'] if in_zone else self.colors['bad']
-                    box_half = box_size // 2
-                    top_left = (target_x - box_half, target_y - box_half)
-                    bottom_right = (target_x + box_half, target_y + box_half)
-                    
-                    overlay = image.copy()
-                    cv2.rectangle(overlay, top_left, bottom_right, box_color, -1)
-                    cv2.addWeighted(overlay, 0.2, image, 0.8, 0, image)
-                    cv2.rectangle(image, top_left, bottom_right, box_color, 2)
-                    
-                    cv2.circle(image, (target_x, target_y), 5, box_color, -1)
-                    cv2.circle(image, (target_x, target_y), 5, (255, 255, 255), 1)
-                    
-                    if not in_zone:
-                        cv2.line(image, (ex, ey), (target_x, target_y), self.colors['bad'], 2)
-                        dx = target_x - ex
-                        dy = target_y - ey
-                        angle = np.arctan2(dy, dx)
-                        arrow_len = 15
-                        cv2.arrowedLine(image, (ex, ey), 
-                                       (int(ex + arrow_len * np.cos(angle)), 
-                                        int(ey + arrow_len * np.sin(angle))),
-                                       self.colors['bad'], 2, tipLength=0.3)
-                    
-                    label_text = "TARGET ZONE" if in_zone else "MOVE ELBOW HERE"
-                    label_color = self.colors['good'] if in_zone else self.colors['bad']
-                    label_y = target_y - box_half - 10
-                    if label_y < 20:
-                        label_y = target_y + box_half + 20
-                    
-                    cv2.putText(image, label_text, (target_x - 60, label_y),
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.5, label_color, 2)
+                # Draw elbow angle using VisualAnnotations
+                VisualAnnotations.draw_angle(
+                    image, sp, ep, wp,
+                    data['current_angle'],
+                    data['form_valid'],
+                    show_value=True
+                )
                 
-                cv2.line(image, (sx, sy), (ex, ey), self.colors['text'], 3)
-                cv2.line(image, (ex, ey), (wx, wy), self.colors['text'], 3)
-                
-                cv2.circle(image, (sx, sy), 8, self.colors['warning'], -1)
-                cv2.circle(image, (ex, ey), 10, self.colors['good'] if data['form_valid'] else self.colors['bad'], -1)
-                cv2.circle(image, (ex, ey), 10, (255, 255, 255), 2)
-                cv2.circle(image, (wx, wy), 8, self.colors['warning'], -1)
-                
-                angle_color = self.colors['good'] if data['form_valid'] else self.colors['bad']
-                angle_text = f"{int(data['elbow_angle'])}°"
-                
-                if arm == 'LEFT':
-                    cv2.putText(image, angle_text, (ex + 20, ey),
-                               cv2.FONT_HERSHEY_SIMPLEX, 1.0, angle_color, 3)
-                else:
-                    cv2.putText(image, angle_text, (ex - 100, ey),
-                               cv2.FONT_HERSHEY_SIMPLEX, 1.0, angle_color, 3)
+                # Draw elbow target zone if baseline set
+                if data['baseline_elbow_pos'] is not None:
+                    # Calculate target position in PIXEL coordinates
+                    # Baseline positions are in normalized coords (0-1)
+                    baseline_elbow_px = (
+                        int(data['baseline_elbow_pos'][0] * w),
+                        int(data['baseline_elbow_pos'][1] * h)
+                    )
+                    baseline_shoulder_px = (
+                        int(data['baseline_shoulder_pos'][0] * w),
+                        int(data['baseline_shoulder_pos'][1] * h)
+                    )
+                    
+                    # Calculate offset in pixels
+                    offset_x = baseline_elbow_px[0] - baseline_shoulder_px[0]
+                    offset_y = baseline_elbow_px[1] - baseline_shoulder_px[1]
+                    
+                    # Apply offset to CURRENT shoulder position
+                    target_x = sp[0] + offset_x
+                    target_y = sp[1] + offset_y
+                    
+                    # Calculate tolerance in pixels
+                    baseline_distance_px = int(data['baseline_distance'] * w)
+                    tolerance_pixels = int(baseline_distance_px * 
+                                          self.thresholds.get('elbow_distance_tolerance', 0.15))
+                    
+                    # Check if in zone
+                    distance = ((ep[0] - target_x)**2 + (ep[1] - target_y)**2)**0.5
+                    in_zone = distance <= tolerance_pixels
+                    
+                    # Draw target zone
+                    VisualAnnotations.draw_target_zone(
+                        image, (target_x, target_y), ep,
+                        tolerance_pixels, in_zone,
+                        label=f"{arm[0]}ELBOW"  # "LELBOW" or "RELBOW"
+                    )
                 
             except Exception as e:
-                print(f"Error drawing {arm}: {e}")
+                logger.error(f"Error drawing annotations for {arm}: {e}")
     
     def reset_session(self):
         """Reset session data."""
         super().reset_session()
         self.active_arms = []
+        
         for arm in ['LEFT', 'RIGHT']:
-            self.arm_data[arm] = self._create_arm_state()
-        print("✓ Bicep curl session reset - Baselines will be recalibrated")
+            self.arm_data[arm] = self._create_arm_state(f"{arm} ARM")
+        
+        logger.info("Bicep curl session reset")
+        print("\n🔄 SESSION RESET - All reps cleared!\n")
     
     def get_session_specific_data(self):
-        """Return arm-specific rep counts."""
+        """Return exercise-specific session data."""
         return {
-            'left_arm_reps': self.arm_data['LEFT']['rep_count'],
-            'right_arm_reps': self.arm_data['RIGHT']['rep_count']
+            'left_arm_reps': self.arm_data['LEFT']['state_machine'].rep_count,
+            'right_arm_reps': self.arm_data['RIGHT']['state_machine'].rep_count,
+            'difficulty': self.difficulty_level
         }
     
     def show_countdown_with_preview(self, cap):
@@ -562,4 +478,3 @@ class BicepCurlChecker(BaseExercise):
                 cv2.waitKey(500)
         
         cv2.destroyWindow(window_name)
-        print("\n✓ Starting bicep curl tracking now!\n")

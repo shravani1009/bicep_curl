@@ -5,7 +5,7 @@ Modify these values to adjust difficulty levels and form requirements.
 
 # Camera and Detection Settings
 CAMERA_CONFIG = {
-    'source': 0,  # 0 = laptop webcam
+    'source': 'http://192.168.1.58:4747/video',  # 0 = laptop webcam
     'width': 1280,
     'height': 720,
     'min_detection_confidence': 0.5,
