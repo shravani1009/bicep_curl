@@ -3,8 +3,6 @@ Logger - Centralized logging system for the application.
 """
 
 import logging
-import os
-from datetime import datetime
 
 
 class AppLogger:
@@ -34,7 +32,7 @@ class AppLogger:
     @classmethod
     def _setup_logger(cls, name, log_level):
         """
-        Setup logger with file and console handlers.
+        Setup logger with console handler only.
         
         Args:
             name (str): Logger name
@@ -43,16 +41,6 @@ class AppLogger:
         Returns:
             logging.Logger: Configured logger
         """
-        # Create logs directory if it doesn't exist
-        log_dir = "logs"
-        os.makedirs(log_dir, exist_ok=True)
-        
-        # Create log file with date
-        log_file = os.path.join(
-            log_dir, 
-            f"gym_{datetime.now().strftime('%Y%m%d')}.log"
-        )
-        
         # Create logger
         logger = logging.getLogger(name)
         logger.setLevel(log_level)
@@ -66,12 +54,6 @@ class AppLogger:
             '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
             datefmt='%Y-%m-%d %H:%M:%S'
         )
-        
-        # File handler
-        file_handler = logging.FileHandler(log_file)
-        file_handler.setLevel(log_level)
-        file_handler.setFormatter(formatter)
-        logger.addHandler(file_handler)
         
         # Console handler (only show WARNING and above)
         console_handler = logging.StreamHandler()
