@@ -5,7 +5,7 @@ Modify these values to adjust difficulty levels and form requirements.
 
 # Camera and Detection Settings
 CAMERA_CONFIG = {
-    'source': 0,  # 0 = laptop webcam
+    'source': "http://192.168.1.58:4747/video",
     'width': 1280,
     'height': 720,
     'min_detection_confidence': 0.5,
@@ -59,6 +59,17 @@ BICEP_CURL_CONFIG = {
             'description': 'Elite form - maximum muscle engagement'
         }
     }
+}
+
+# Gesture Control Settings
+GESTURE_CONFIG = {
+    'enabled': True,
+    'gesture_type': 'PEACE_SIGN',  # Peace sign (✌️) gesture for reset
+    'hold_duration': 1.5,  # Seconds to hold gesture before triggering reset
+    'cooldown_duration': 2.0,  # Seconds before next gesture can be detected
+    'detection_confidence': 0.7,  # Minimum confidence for hand detection
+    'show_gesture_feedback': True,  # Show visual feedback when gesture detected
+    'frames_per_second': 30  # Expected FPS for frame-to-second conversion
 }
 
 # UI Colors (BGR format for OpenCV)

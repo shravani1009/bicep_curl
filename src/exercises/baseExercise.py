@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 
 from config.exerciseConfig import COLORS
 from src.utils.cameraManager import CameraManager
-from src.utils.palmDetector import PalmDetector
+from src.utils.gestureDetector import GestureDetector
 from src.utils.sessionTracker import SessionTracker
 from src.utils.poseProcessor import PoseProcessor
 from src.utils.uiRenderer import UIRenderer
@@ -31,7 +31,7 @@ class BaseExercise(ABC):
         """Initialize common components for all exercises."""
         # Initialize modular components
         self.pose_processor = PoseProcessor()
-        self.palm_detector = PalmDetector()
+        self.gesture_detector = GestureDetector()
         self.session_tracker = SessionTracker(self.get_exercise_name())
         self.camera_manager = CameraManager()
         self.ui_renderer = UIRenderer(self.get_exercise_name())
@@ -101,12 +101,12 @@ class BaseExercise(ABC):
             # Process pose using pose processor
             image, pose_results = self.pose_processor.process_frame(frame)
             
-            # Process hands for palm detection
+            # Process hands for gesture detection
             image_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            palm_detected = self.palm_detector.process_frame(image_rgb)
+            gesture_detected = self.gesture_detector.process_frame(image_rgb)
             
-            # Update palm detection state and check for reset
-            if self.palm_detector.update_state(palm_detected):
+            # Update gesture detection state and check for reset
+            if self.gesture_detector.update_state(gesture_detected):
                 self.reset_session()
 
             if pose_results and pose_results.pose_landmarks:
@@ -128,8 +128,8 @@ class BaseExercise(ABC):
                 cv2.putText(image, "Ensure full body is visible", (w//2 - 200, h//2 + 50),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
             
-            # Draw palm detection feedback
-            self.palm_detector.draw_feedback(image, palm_detected)
+            # Draw gesture detection feedback
+            self.gesture_detector.draw_feedback(image, gesture_detected)
 
             # Draw UI Panel (exercise-specific)
             self.draw_feedback_panel(image)
@@ -254,7 +254,7 @@ class BaseExercise(ABC):
                 cap.release()
             cv2.destroyAllWindows()
             self.pose_processor.cleanup()
-            self.palm_detector.cleanup()
+            self.gesture_detector.cleanup()
             logger.info("Resources cleaned up")
     
     def initialize_camera(self):
@@ -273,7 +273,7 @@ class BaseExercise(ABC):
     def reset_session(self):
         """Reset session (override in subclass for specific behavior)."""
         self.session_tracker.reset()
-        self.palm_detector.reset()
+        self.gesture_detector.reset()
         self.feedback_manager.reset()
         print("\n🔄 SESSION RESET! All reps and feedback cleared.\n")
     

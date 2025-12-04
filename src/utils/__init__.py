@@ -3,7 +3,7 @@
 from .smoothing import ExponentialMovingAverage
 from .angleCalculator import AngleCalculator
 from .cameraManager import CameraManager
-from .palmDetector import PalmDetector
+from .gestureDetector import GestureDetector
 from .poseProcessor import PoseProcessor
 from .sessionTracker import SessionTracker
 from .uiRenderer import UIRenderer
@@ -20,7 +20,7 @@ __all__ = [
     'ExponentialMovingAverage',
     'AngleCalculator',
     'CameraManager',
-    'PalmDetector',
+    'GestureDetector',
     'PoseProcessor',
     'SessionTracker',
     'UIRenderer',
