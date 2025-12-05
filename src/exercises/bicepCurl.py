@@ -187,11 +187,18 @@ class BicepCurlChecker(BaseExercise):
             
             # Log feedback
             if state_result['feedback']:
-                print(f"{arm}: {state_result['feedback']}")
+                print(f"\n{arm}: {state_result['feedback']}")
             
-            # Log form issues
+            # Log form issues with detailed correction guidance
             if data['form_issues']:
-                print(f"{arm} form issues: {', '.join(data['form_issues'])}")
+                print(f"\n⚠️  {arm} FORM ERRORS:")
+                for issue in data['form_issues']:
+                    print(f"   ❌ {issue}")
+                # Provide correction tips
+                if any('ELBOW' in issue for issue in data['form_issues']):
+                    print(f"   💡 TIP: Keep your elbow pinned at your side - imagine it's glued there!")
+                if any('SHOULDER' in issue for issue in data['form_issues']):
+                    print(f"   💡 TIP: Keep shoulders down - only move your forearm, not your whole arm!")
             
             return {
                 'angle': data['current_angle'],
@@ -229,13 +236,18 @@ class BicepCurlChecker(BaseExercise):
         )
         
         if not is_stable:
-            issues.append("Elbow moving")
+            # Detailed feedback about elbow movement
+            displacement_percent = int(displacement * 100)
+            threshold_percent = int(self.thresholds.get('elbow_distance_tolerance', 0.15) * 100)
+            issues.append(f"ELBOW MOVING! Keep elbow locked in place (moved {displacement_percent}%, max {threshold_percent}%)")
             logger.debug(f"{arm} elbow displacement: {displacement:.3f}")
         
         # Check shoulder stability (no shrugging)
         shoulder_lift = data['baseline_shoulder_y'] - shoulder['y']
         if shoulder_lift > self.thresholds.get('shoulder_shrug_threshold', 0.05):
-            issues.append("Shoulder shrugging")
+            # Detailed feedback about shoulder shrugging
+            lift_percent = int(shoulder_lift * 100)
+            issues.append(f"SHOULDER SHRUGGING! Keep shoulders down and relaxed (lifted {lift_percent}%)")
             logger.debug(f"{arm} shoulder lift: {shoulder_lift:.3f}")
         
         is_valid = len(issues) == 0

@@ -5,54 +5,62 @@ Modify these values to adjust difficulty levels and form requirements.
 
 # Camera and Detection Settings
 CAMERA_CONFIG = {
-    'source': "http://192.168.1.58:4747/video",
+    'source': "http://192.168.1.69:4747/video",
     'width': 1280,
     'height': 720,
     'min_detection_confidence': 0.5,
     'min_tracking_confidence': 0.5,
-    'model_complexity': 1
+    'model_complexity': 0
 }
 
 # Bicep Curl Configuration (Consolidated)
 BICEP_CURL_CONFIG = {
     'difficulty_levels': {
         'BEGINNER': {
-            'start_angle': 160,
-            'top_angle': 60,
-            'elbow_down_min': 150,
-            'elbow_up_max': 40,
-            'elbow_displacement_threshold': 0.12,
-            'elbow_distance_tolerance': 0.20,
-            'elbow_drift_angle': 35,
-            'max_elbow_velocity': 0.025,
+            # Rep Counter Thresholds
+            'start_angle': 150,  # Arm must be >= this to be DOWN
+            'top_angle': 50,     # Arm must be <= this to be UP
+            
+            # Form Validation Ranges (aligned with rep thresholds)
+            'elbow_down_min': 150,    # Minimum for "good" extension
+            'elbow_up_max': 50,   # Maximum for "good" contraction
+            
+            # Elbow Stability
+            'elbow_displacement_threshold': 0.10,
+            'elbow_distance_tolerance': 0.15,
+            'elbow_drift_angle': 25,
+            'max_elbow_velocity': 0.015,
+            
+            # Body Control
             'shoulder_shrug_threshold': 0.06,
             'torso_lean_threshold': 15,
             'max_velocity_change': 20,
+            
             'description': 'Building foundation - focus on control'
         },
         'INTERMEDIATE': {
-            'start_angle': 165,
+            'start_angle': 155,
             'top_angle': 55,
             'elbow_down_min': 155,
-            'elbow_up_max': 50,
-            'elbow_displacement_threshold': 0.08,
-            'elbow_distance_tolerance': 0.18,
-            'elbow_drift_angle': 32,
-            'max_elbow_velocity': 0.018,
+            'elbow_up_max': 55,
+            'elbow_displacement_threshold': 0.05,
+            'elbow_distance_tolerance': 0.10,
+            'elbow_drift_angle': 20,
+            'max_elbow_velocity': 0.012,
             'shoulder_shrug_threshold': 0.04,
             'torso_lean_threshold': 12,
             'max_velocity_change': 15,
             'description': 'Refining technique - stricter form'
         },
         'ADVANCED': {
-            'start_angle': 170,
+            'start_angle': 165,
             'top_angle': 50,
             'elbow_down_min': 165,
             'elbow_up_max': 50,
-            'elbow_displacement_threshold': 0.05,
-            'elbow_distance_tolerance': 0.15,
-            'elbow_drift_angle': 30,
-            'max_elbow_velocity': 0.015,
+            'elbow_displacement_threshold': 0.03,
+            'elbow_distance_tolerance': 0.08,
+            'elbow_drift_angle': 15,
+            'max_elbow_velocity': 0.010,
             'shoulder_shrug_threshold': 0.03,
             'torso_lean_threshold': 10,
             'max_velocity_change': 12,

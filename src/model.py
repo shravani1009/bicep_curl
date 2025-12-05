@@ -64,12 +64,11 @@ class PoseModel:
         try:
             logger.info("Initializing MediaPipe Pose model")
             return self.mp_pose.Pose(
-                min_detection_confidence=self.min_detection_confidence,
-                min_tracking_confidence=self.min_tracking_confidence,
+                static_image_mode=False,  # Optimized for video streams
                 model_complexity=self.model_complexity,
-                smooth_landmarks=True,  # Enable landmark smoothing
-                enable_segmentation=False,  # Disable segmentation for performance
-                smooth_segmentation=False
+                smooth_landmarks=False,  # Disable for faster processing
+                min_detection_confidence=self.min_detection_confidence,
+                min_tracking_confidence=self.min_tracking_confidence
             )
         except Exception as e:
             logger.error(f"Failed to initialize MediaPipe Pose model: {e}")

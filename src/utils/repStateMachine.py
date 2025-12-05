@@ -84,24 +84,24 @@ class RepStateMachine:
             if self._is_at_peak(current_value, peak_threshold, tolerance):
                 if form_valid:
                     self.state = RepState.AT_PEAK
-                    feedback = "Peak reached!"
+                    feedback = "✓ Peak reached with good form!"
                     logger.debug(f"{self.limb_name} - At peak (angle: {current_value:.1f}°)")
                 else:
                     # Bad form during curl up
                     self.state = RepState.WAITING
-                    feedback = "Rep aborted - Fix form"
+                    feedback = "❌ REP ABORTED - Bad form while curling up! Check feedback above."
                     logger.warning(f"{self.limb_name} - Rep aborted (poor form going up)")
             
             elif not form_valid:
                 # Form broke while moving to peak
                 self.state = RepState.WAITING
-                feedback = "Rep aborted - Fix form"
+                feedback = "❌ REP ABORTED - Form broke during movement! Check feedback above."
                 logger.warning(f"{self.limb_name} - Rep aborted (form broke)")
             
             elif angle_change < -5:  # Moving back towards start (angle increasing)
                 # Didn't reach peak, moving back
                 self.state = RepState.WAITING
-                feedback = "Incomplete curl"
+                feedback = "❌ Incomplete curl - Curl all the way up to your shoulder!"
                 logger.debug(f"{self.limb_name} - Incomplete curl (didn't reach peak)")
         
         # AT_PEAK → RETURNING: Started returning to start
@@ -118,10 +118,10 @@ class RepStateMachine:
                 if form_valid:
                     self.rep_count += 1
                     rep_completed = True
-                    feedback = f"✓ REP {self.rep_count} COMPLETE!"
+                    feedback = f"✅ REP {self.rep_count} COMPLETE! Excellent form!"
                     logger.info(f"{self.limb_name} - Rep {self.rep_count} completed")
                 else:
-                    feedback = "Rep NOT counted - Poor form on return"
+                    feedback = "❌ REP NOT COUNTED - Poor form while lowering! Check feedback above."
                     logger.warning(f"{self.limb_name} - Rep not counted (bad form on return)")
                 
                 self.state = RepState.WAITING
@@ -129,7 +129,7 @@ class RepStateMachine:
             elif not form_valid:
                 # Form broke while returning
                 self.state = RepState.WAITING
-                feedback = "Rep NOT counted - Form broke"
+                feedback = "❌ REP NOT COUNTED - Form broke while lowering! Check feedback above."
                 logger.warning(f"{self.limb_name} - Rep not counted (form broke)")
             
             elif self._is_at_peak(current_value, peak_threshold, tolerance + 10):
